@@ -1,0 +1,77 @@
+version: '3.8'
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.7.0-python3.9
+  env_file:
+    - .env
+  environment:
+    - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://your-username:your-password@postgres/your-db
+    - AIRFLOW__CORE__FERNET_KEY=your-fernet-key
+    - AIRFLOW__WEBSERVER__SECRET_KEY=your-webserver-secret-key
+    - PYTHONPATH=/opt/airflow/src:/opt/airflow 
+    - AIRFLOW_CONN_MARIADB_CONN=mysql://your-username:your-password@host.docker.internal:3306/your-db
+    - AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT=google-cloud-platform://?extra__google_cloud_platform__key_path=/opt/airflow/credentials/your-service-account.json&extra__google_cloud_platform__project=your-gcp-project
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./src:/opt/airflow/src 
+    - ./config:/opt/airflow/config
+    - ./sql:/opt/airflow/sql
+    - ./logs:/opt/airflow/logs
+    - ./credentials:/opt/airflow/credentials
+    - ./scripts:/opt/airflow/scripts
+  networks:
+    - airflow_network
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: your-username
+      POSTGRES_PASSWORD: your-password
+      POSTGRES_DB: your-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - airflow_network
+
+  airflow-init:
+    <<: *airflow-common
+    depends_on:
+      - postgres
+    entrypoint: /bin/bash
+    command: -c "airflow db init && airflow users create \
+      --username your-admin-username \
+      --password your-admin-password \
+      --firstname Admin \
+      --lastname User \
+      --role Admin \
+      --email your-email@example.com"
+
+  airflow-webserver:
+    <<: *airflow-common
+    depends_on:
+      - postgres
+      - airflow-init
+    environment:
+      - AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT=180
+      - AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT=180
+    ports:
+      - "8080:8080"
+    command: webserver
+
+  airflow-scheduler:
+    <<: *airflow-common
+    depends_on:
+      - postgres
+      - airflow-init
+    command: scheduler
+
+volumes:
+  postgres_data:
+
+networks:
+  airflow_network:
+    driver: bridge

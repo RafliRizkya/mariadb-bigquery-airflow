@@ -1,0 +1,33 @@
+tables:
+
+  your_table_name:
+    schedule: "0 22 * * *"
+    extract_type: "monthly" 
+    date_column: "date"
+    order_by: "date ASC"
+    transform: "standard"
+    destination_table: "table in bigquery"
+
+# SQL Templates untuk berbagai jenis extract
+extract_templates:
+  monthly: |
+    SELECT * FROM {table}
+    WHERE
+       MONTH({date_column}) = {month}
+       AND YEAR({date_column}) = {year}
+    ORDER BY {order_by}
+    
+  incremental: |
+    SELECT * FROM {table}
+    WHERE {date_column} > '{last_run_date}'
+    AND {date_column} <= '{current_run_date}'
+    ORDER BY {order_by}
+    
+  daily: |
+    SELECT * FROM {table}
+    WHERE DATE({date_column}) = '{target_date}'
+    ORDER BY {order_by}
+    
+  full: |
+    SELECT * FROM {table}
+    ORDER BY {order_by}
